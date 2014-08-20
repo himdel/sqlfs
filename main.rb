@@ -20,15 +20,17 @@ class MysqlDB
 	end
 
 	def struct(db, tbl)
-		'123'
+		@client.query('use ' + db)
+		@client.query('describe ' + tbl).to_a
 	end
 
 	def dump(db, tbl)
-		'-- ne'
+		@client.query('use ' + db)
+		@client.query('select * from ' + tbl).to_a
 	end
 
-	def json(db, tbl)
-		'{}'
+	def escape(str)
+		@client.escape(str.to_s)
 	end
 
 end
@@ -51,7 +53,7 @@ class DBListDir
 		elsif path.size == 1
 			@db.tables( path[0] )
 		elsif path.size == 2
-			[ 'struct', 'dump', 'json' ]
+			[ 'struct.sql', 'struct.json', 'dump.sql', 'dump.json' ]
 		else
 			[]
 		end
@@ -71,17 +73,32 @@ class DBListDir
 
 	def read_file(path)
 		path = _path_split(path)
-		p path
 
-		if path[2] == 'struct'
-			@db.struct( path[0], path[1] )
-		elsif path[2] == 'dump'
-			@db.dump( path[0], path[1] )
-		elsif path[2] == 'json'
-			@db.json( path[0], path[1] )
+		if path[2] == 'struct.sql'
+			# TODO indexes etc
+			"CREATE TABLE [#{path[1]}] (\n\t" + @db.struct( path[0], path[1] ).map do |fld|
+				str = "[#{fld['Field']}] #{fld['Type']}"
+				str += ' NOT NULL' if fld['Null'] == 'NO'
+				str += ' DEFAULT ' + fld['Default'] if fld['Default']
+				str += ' PRIMARY KEY' if fld['Key'] == 'PRI'
+				str
+			end.join(",\n\t") + "\n);"
+		elsif path[2] == 'struct.json'
+			JSON.pretty_generate( @db.struct( path[0], path[1] ) )
+		elsif path[2] == 'dump.sql'
+			data = @db.dump( path[0], path[1] )
+			keys = data.first.keys
+
+			"INSERT INTO [#{path[1]}] ( [#{keys.join('], [')}] ) VALUES\n\t" + data.map do |row|
+				'("' + keys.map do |k|
+					@db.escape( row[k] )
+				end.join('", "') + '")'
+			end.join(",\n\t") + ";"
+		elsif path[2] == 'dump.json'
+			JSON.pretty_generate( @db.dump( path[0], path[1] ) )
 		else
 			nil
-		end + "\n" rescue ""
+		end + "\n" #rescue ""
 	end
 
 end
