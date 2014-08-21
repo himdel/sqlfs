@@ -33,6 +33,11 @@ class MysqlDB
 		@client.escape(str.to_s)
 	end
 
+	def by_id(db, tbl, id)
+		@client.query('use ' + db)
+		@client.query('SELECT * FROM ' + tbl + ' WHERE id = ' + id.to_i.to_s)
+	end
+
 end
 
 class DBListDir
@@ -96,9 +101,9 @@ class DBListDir
 			end.join(",\n\t") + ";"
 		elsif path[2] == 'dump.json'
 			JSON.pretty_generate( @db.dump( path[0], path[1] ) )
-		else
-			nil
-		end + "\n" #rescue ""
+		elsif path[2].to_i.to_s == path[2]
+			JSON.pretty_generate( @db.by_id( *path ).to_a.first )
+		end + "\n"
 	end
 
 end
